@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0f1115;
+  --color-card: #181b22;
+  --color-card2: #1f232c;
+  --color-tx: #f2f4f8;
+  --color-mut: #8b93a3;
+  --color-ac: #f5b942;
+  --color-acink: #1a1405;
+  --color-ok: #3ecf8e;
+  --color-bad: #ff6b6b;
+  --color-bd: #2a2f3a;
+  --color-wa: #1d3a2c;
+  --color-wabd: #25613f;
+}
+
+html, body { background: var(--color-bg); color: var(--color-tx); }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior-y: none;
+}
+input, select, textarea { font-size: 16px; } /* iOS zoom etməsin */
+input[type="date"], input[type="time"] { color-scheme: dark; }
+
+@layer components {
+  .field {
+    @apply w-full rounded-xl border border-bd bg-card2 px-3.5 py-3 text-base text-tx outline-none placeholder:text-mut focus:border-ac;
+  }
+  .btn {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 whitespace-nowrap rounded-xl bg-ac px-4 font-bold text-acink active:scale-[.98] disabled:opacity-50;
+  }
+  .btn-ghost {
+    @apply inline-flex min-h-12 items-center justify-center gap-2 rounded-xl border border-bd bg-card2 px-4 font-semibold text-tx active:scale-[.98] disabled:opacity-50;
+  }
+  .card { @apply mb-3 rounded-2xl border border-bd bg-card p-4; }
+  .icon-btn {
+    @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-bd bg-card2 text-lg active:scale-95;
+  }
+  .label { @apply mb-1.5 block text-sm text-mut; }
+}
+
+@keyframes pulse-rec { 50% { transform: scale(1.06); } }
+.rec { animation: pulse-rec 1s infinite; }
