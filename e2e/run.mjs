@@ -29,7 +29,7 @@ const uniq = String(Date.now()).slice(-7);
 const phoneA = `050${uniq}`;
 const phoneB = `055${uniq}`;
 
-const browser = await chromium.launch();
+const browser = await chromium.launch({ args: ["--use-fake-ui-for-media-stream", "--use-fake-device-for-media-stream"] });
 const mobile = { ...devices["Pixel 7"], locale: "az-AZ", timezoneId: "Asia/Baku" };
 
 async function register(ctx, salon, phone, pin) {
@@ -140,6 +140,43 @@ await A.getByRole("link", { name: "Müştərilər" }).click();
 await A.waitForURL(/musteriler/);
 check(await A.getByText("Şafak").isVisible(), "müştəri siyahısında Şafak");
 await shot(A, "07-musteriler.png");
+
+// ---------------- Səs (Mərhələ 2) ----------------
+await A.goto(BASE + "/");
+let voiceReq = null;
+await A.route("**/api/voice", async (route) => {
+  voiceReq = route.request();
+  // Whisper "Tofiq"i səhv tanıdı ("Tofik") — berber təsdiq ekranında düzəltməlidir
+  await route.fulfill({ json: { transcript: "Cümə axşamı saat 12-yə Tofik", name: "Tofik", date: null, time: "12:00", question: null, source: "llm" } });
+});
+await ctxA.grantPermissions(["microphone"], { origin: BASE });
+const mic = A.getByRole("button", { name: "Danış" });
+const mb = await mic.boundingBox();
+await A.mouse.move(mb.x + mb.width / 2, mb.y + mb.height / 2);
+await A.mouse.down();
+await A.getByText(/Dinləyirəm/).waitFor();
+await A.waitForTimeout(1500);
+await A.mouse.up();
+dlg = A.getByRole("dialog");
+await dlg.waitFor();
+const body = voiceReq ? voiceReq.postDataBuffer() : null;
+check(!!body && body.length > 1000 && /audio\/(webm|ogg|mp4)/.test(body.toString("latin1")), "səs yazıldı və /api/voice-a audio getdi");
+check(await dlg.getByText("«Cümə axşamı saat 12-yə Tofik»").isVisible(), "təsdiq ekranında eşidilən mətn göstərilir");
+check((await dlg.locator('input[name="time"]').inputValue()) === "12:00", "səs: saat 12:00");
+await shot(A, "09-ses-tesdiq.png");
+await dlg.locator('input[name="clientName"]').fill("Tofiq");
+await dlg.getByRole("button", { name: "✓ Təsdiq et" }).click();
+await dlg.waitFor({ state: "detached" });
+check(await A.getByRole("button", { name: /^12:00\s*Tofiq/ }).waitFor({ timeout: 5000 }).then(() => true, () => false), "yanlış tanınan ad düzəldilib yadda saxlanıldı");
+await A.unroute("**/api/voice");
+
+// Real endpoint: girişsiz 401, açar yoxdursa aydın mesaj
+const anon = await fetch(BASE + "/api/voice", { method: "POST" });
+check(anon.status === 401, "/api/voice girişsiz → 401");
+if (!process.env.OPENAI_API_KEY) {
+  const r = await A.request.post(BASE + "/api/voice", { multipart: { audio: { name: "v.webm", mimeType: "audio/webm", buffer: Buffer.alloc(2000) } } });
+  check(r.status() === 503 && (await r.json()).error.includes("qoşulmayıb"), "açar yoxdursa: 503 + yazı ilə əlavə et mesajı");
+}
 
 // ---------------- Berber B (ayrı brauzer) ----------------
 const ctxB = await browser.newContext(mobile);

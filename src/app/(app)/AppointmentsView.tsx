@@ -5,6 +5,7 @@ import { Sheet } from "@/components/Sheet";
 import { Msg } from "@/components/Msg";
 import { ClientNameInput, type ClientPick } from "@/components/ClientNameInput";
 import { parseAppointment } from "@/lib/parse";
+import { VoiceButton } from "@/components/VoiceButton";
 import { addDays, relativeDate, weekday, WD_SHORT } from "@/lib/time";
 import { formatPhone, waLink } from "@/lib/phone";
 import { reminderText } from "@/lib/messages";
@@ -51,8 +52,10 @@ export function AppointmentsView({
   const [flash, setFlash] = useState<string | null>(null);
   const [paying, setPaying] = useState<ApItem | null>(null);
   const [sheetKey, setSheetKey] = useState(0);
-  const openDraft = (d: Draft, h: string | null = null) => {
+  const [heard, setHeard] = useState<string | null>(null);
+  const openDraft = (d: Draft, h: string | null = null, transcript: string | null = null) => {
     setHint(h);
+    setHeard(transcript);
     setDraft(d);
     setSheetKey((k) => k + 1); // hər açılışda form xətaları sıfırlanır
   };
@@ -91,10 +94,14 @@ export function AppointmentsView({
   return (
     <>
       <div className="card text-center">
-        <MicButton
-          onText={(t) => {
-            setPhrase(t);
-            openFromPhrase(t);
+        <VoiceButton
+          onResult={(r) => {
+            setPhrase(r.transcript);
+            openDraft(
+              { clientId: null, name: r.name ?? "", phone: "", date: r.date ?? sel, time: r.time ?? "" },
+              r.question,
+              r.transcript,
+            );
           }}
         />
         <form
@@ -216,6 +223,7 @@ export function AppointmentsView({
         key={sheetKey}
         draft={draft}
         hint={hint}
+        heard={heard}
         today={today}
         onChange={setDraft}
         onClose={() => setDraft(null)}
@@ -261,6 +269,7 @@ function DoneButton({ item, onPay }: { item: ApItem; onPay: () => void }) {
 function AppointmentSheet({
   draft,
   hint,
+  heard,
   today,
   onChange,
   onClose,
@@ -269,6 +278,7 @@ function AppointmentSheet({
 }: {
   draft: Draft | null;
   hint: string | null;
+  heard: string | null;
   today: string;
   onChange: (d: Draft) => void;
   onClose: () => void;
@@ -315,6 +325,11 @@ function AppointmentSheet({
           <b>{draft.name}</b> — {relativeDate(draft.date, today)} <b className="text-ac">{draft.time}</b>.
           <br />
           <span className="text-base text-mut">Təsdiq edirsən?</span>
+        </p>
+      )}
+      {heard && (
+        <p className="mb-2 text-center text-sm text-mut">
+          Eşitdim: <i className="text-tx">«{heard}»</i>
         </p>
       )}
       {hint && <Msg kind="warn">{hint}</Msg>}
@@ -435,60 +450,5 @@ function PaySheet({ item, onClose, onDone }: { item: ApItem | null; onClose: () 
         Məbləğsiz qeyd et
       </button>
     </Sheet>
-  );
-}
-
-// Mərhələ 1: brauzerin öz nitq tanıması (varsa). Mərhələ 2-də Whisper ilə əvəz olunacaq.
-type SR = {
-  lang: string;
-  interimResults: boolean;
-  onresult: (e: { results: { 0: { transcript: string } }[] }) => void;
-  onerror: () => void;
-  onend: () => void;
-  start: () => void;
-  stop: () => void;
-};
-
-function MicButton({ onText }: { onText: (t: string) => void }) {
-  const [rec, setRec] = useState<SR | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-  function toggle() {
-    if (rec) {
-      rec.stop();
-      return;
-    }
-    const W = window as unknown as { SpeechRecognition?: new () => SR; webkitSpeechRecognition?: new () => SR };
-    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition;
-    if (!Ctor) {
-      setMsg("Bu brauzerdə səs tanıma yoxdur. Aşağıda yazın.");
-      return;
-    }
-    const r = new Ctor();
-    r.lang = "az-AZ";
-    r.interimResults = false;
-    r.onresult = (e) => onText(e.results[0][0].transcript);
-    r.onerror = () => setMsg("Mikrofona icazə verilmədi. Aşağıda yazın.");
-    r.onend = () => setRec(null);
-    setMsg(null);
-    setRec(r);
-    try {
-      r.start();
-    } catch {
-      setRec(null);
-      setMsg("Mikrofon işə düşmədi. Aşağıda yazın.");
-    }
-  }
-  return (
-    <>
-      <button
-        type="button"
-        onClick={toggle}
-        aria-label={rec ? "Dayandır" : "Danış"}
-        className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full text-3xl ${rec ? "rec bg-bad text-white shadow-[0_0_0_12px_rgba(255,107,107,.2)]" : "bg-ac text-acink shadow-[0_0_0_8px_rgba(245,185,66,.15)]"}`}
-      >
-        🎤
-      </button>
-      <p className="mb-3 mt-3 text-sm text-mut">{msg ?? (rec ? "Dinləyirəm... danış" : "Mikrofona bas və de, ya da aşağıda yaz")}</p>
-    </>
   );
 }
